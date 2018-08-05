@@ -22,16 +22,18 @@ func usage(){
 
 
 func main(){
-	fmt.Println("hllo")
-	if len(os.Args) != -1{
+	fmt.Println("start main")
+	fmt.Printf("arg count:%d\n", len(os.Args))
+	if len(os.Args) != 2{
 		usage();
 		return;
 	}
 	
-	filePath := os.Args[0]
+	filePath := os.Args[1]
 	
 
 	var sp StructParser
 	sp.ParseFile(filePath)
-	
+	sp.PrintWords()
+
 }

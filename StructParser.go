@@ -37,18 +37,24 @@ type StructParser struct{
 }
 
 func (this *StructParser) ParseFile(filePath string){
+	fmt.Print("start parse ...\n")
 	this.wordIndex = 0
 	code, err := ioutil.ReadFile(filePath)
 	if err != nil{
 		if os.IsNotExist(err){
 			fmt.Printf("%s not exist!\n", filePath)
+			return
 		}else{
 			fmt.Println(err)
+			return
 		}
 	}
+	fmt.Printf("code:\n%s\n", string(code))
 
+	fmt.Print("start split ...\n")
 	this.splitWord(code)
 
+	fmt.Print("start parse words...\n")
 	this.parse();
 }
 
@@ -155,4 +161,10 @@ func (this *StructParser) splitWord(code []byte) {
 
 func IsSeparator(c byte) bool {
 	return c ==' ' || c == '\t'
+}
+
+func (this *StructParser) PrintWords(){
+	for _,w := range(this.Words){
+		fmt.Printf("line:%d %s\n", w.LineNo, w.Word) 
+	}
 }
