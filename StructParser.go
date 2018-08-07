@@ -30,8 +30,16 @@ var inner_types = map[string]int{
 // user define types
 var user_types = map[string]int{}
 
-func (this *Member) Size() {
-	return inner_types[this.Name]
+func (this *Member) Size() int {
+	if size, ok := inner_types[this.Name]; ok {
+		return size
+	}
+
+	if size, ok := user_types[this.Name]; ok {
+		return size
+	}
+
+	return 0
 }
 
 type Word struct {
@@ -190,8 +198,8 @@ func (this *StructParser) PrintWords() {
 }
 
 func (this *StructParser) Fix() {
-	for _, s := range this.Structs {
-		this.FixStruct(s)
+	for _, s := range this.structs {
+		this.FixStruct(&)
 	}
 }
 
@@ -204,14 +212,15 @@ func (this *StructParser) MemberIndex(memName string) {
 		}
 	}
 
-	return strconv.atoi(memName[pos:])
+	return strconv.Atoi(memName[pos:])
 }
 
 func (this *StructParser) FixStruct(s *Struct) Struct {
-	var ret Sturct
+	var ret Struct
 	ret.Name = s.Name
 	lastPos := 0
 	pos := 0
+	var count = 0
 	var newMem Member
 	for i, m := range s.Members {
 		pos = this.MemberIndex(m.Name)
