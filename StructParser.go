@@ -12,11 +12,31 @@ type Struct struct {
 	Members []Member
 }
 
+func (this *Struct) ToString() string {
+	var s = ""
+	s += fmt.Sprintf("struct %s\n", this.Name)
+	s += "{\n"
+	for _,m := range this.Members{
+		s += "\t" + m.ToString() + "\n"
+	}
+
+	s += "};\n"
+
+	return s
+}
+
 type Member struct {
 	Name     string
 	TypeName string
 	IsArr    bool
 	ArrLen   int
+}
+
+func (this *Member) ToString() string {
+	if this.IsArr {
+		return fmt.Sprintf("%s %s[%d];", this.TypeName, this.Name, this.ArrLen)
+	}
+	return fmt.Sprintf("%s %s;", this.TypeName, this.Name)
 }
 
 // 内置类型的大小
@@ -31,15 +51,35 @@ var inner_types = map[string]int{
 var user_types = map[string]int{}
 
 func (this *Member) Size() int {
-	if size, ok := inner_types[this.Name]; ok {
+	if size, ok := inner_types[this.TypeName]; ok {
+		if this.IsArr{
+			return size * this.ArrLen
+		}
 		return size
 	}
 
-	if size, ok := user_types[this.Name]; ok {
+	if size, ok := user_types[this.TypeName]; ok {
+		if this.IsArr{
+			return size * this.ArrLen
+		}
 		return size
 	}
 
 	return 0
+}
+
+func (this *Member) Offset() int {
+	ret := 0
+	pos := 0
+	for i, c := range this.Name {
+		pos = i
+		if c >='0' && c <= '9' {
+			break
+		}
+	}
+
+	ret,_ = strconv.Atoi(this.Name[pos:])
+	return ret
 }
 
 type Word struct {
@@ -57,6 +97,7 @@ type StructParser struct {
 	Words     []Word
 	wordIndex int
 	structs   []Struct
+	fixedStructs [] Struct // 修正后的
 }
 
 func (this *StructParser) ParseFile(filePath string) {
@@ -76,9 +117,11 @@ func (this *StructParser) ParseFile(filePath string) {
 
 	fmt.Print("start split ...\n")
 	this.splitWord(code)
-	this.PrintWords()
+	//this.PrintWords()
 	fmt.Print("start parse words...\n")
 	this.parse()
+	//this.DumpSrcStructs()
+	this.Fix()
 }
 
 func (this *StructParser) NextWord() (Word, bool) {
@@ -109,7 +152,7 @@ func (this *StructParser) parse() {
 	var currStruct Struct
 	w, ret := this.NextWord()
 	for ret {
-		fmt.Printf("word:%s\n", w.Word)
+		//fmt.Printf("word:%s\n", w.Word)
 		if w.Equal("#pragma") {
 			this.ScrollToNextLine()
 		} else if w.Equal("struct") {
@@ -199,78 +242,99 @@ func (this *StructParser) PrintWords() {
 
 func (this *StructParser) Fix() {
 	for _, s := range this.structs {
-		this.FixStruct(&)
+		this.fixedStructs = append(this.fixedStructs, this.FixStruct(&s))
 	}
 }
 
-func (this *StructParser) MemberIndex(memName string) {
+func (this *StructParser) DumpFixedStructs(){
+	for _, s := range this.fixedStructs{
+		fmt.Print(s.ToString())
+	}
+}
+
+func (this *StructParser) DumpSrcStructs(){
+	for _, s := range this.structs{
+		fmt.Print(s.ToString())
+	}
+}
+
+func (this *StructParser) MemberIndex(memName string) int {
 	ret := 0
 	pos := 0
-	for pos, c := range memName {
-		if c < '0' && c > '9' {
+	for i, c := range memName {
+		pos = i
+		if c >='0' && c <= '9' {
 			break
 		}
 	}
 
-	return strconv.Atoi(memName[pos:])
+	ret,_ = strconv.Atoi(memName[pos:])
+	return ret
+}
+
+
+func genMember(s * Struct, beginIndex int, size int){
+	var count = 0
+	var newMem Member
+
+	if size % 4 == 0{ // 可以用整型
+		count = size/4
+		for i:=0;i<count;i++{ // 整型就不用数组了
+			
+			newMem = Member{
+				fmt.Sprintf( "n%d", beginIndex + i * 4),
+				"int",
+				false,
+				0,
+			}
+			s.Members = append(s.Members, newMem)
+		}
+	}else {
+		if size>1{// 用 char []
+			newMem = Member{
+				fmt.Sprintf( "n%d", beginIndex),
+				"char",
+				true,
+				size,
+			}
+		}else{
+			newMem = Member{
+				fmt.Sprintf( "n%d", beginIndex),
+				"char",
+				false,
+				0,
+			}
+		}
+		s.Members = append(s.Members, newMem)
+	}
 }
 
 func (this *StructParser) FixStruct(s *Struct) Struct {
 	var ret Struct
 	ret.Name = s.Name
-	lastPos := 0
 	pos := 0
-	var count = 0
-	var newMem Member
+	offset := 0
 	for i, m := range s.Members {
-		pos = this.MemberIndex(m.Name)
+		pos = m.Offset()
 		if i == 0 {
 			if pos != 0 {
-				if pos%4 == 0 {
-					count = pos / 4
-					if count > 1 {
-						newMem = Member{
-							"n",
-							"int",
-							true,
-							count,
-						}
-					} else {
-						newMem = Member{
-							"n",
-							"int",
-							false,
-							0,
-						}
-					}
-				} else {
-					count = pos
-					if count > 1 {
-						newMem = Member{
-							"c",
-							"char",
-							true,
-							count,
-						}
-					} else {
-						newMem = Member{
-							"c",
-							"char",
-							false,
-							0,
-						}
-					}
+				genMember(&ret, 0, pos-0)
+				offset += pos-0
+			} 
 
-				}
-				ret.Members = append(ret.Members, newMem)
-				ret.Members = append(ret.Members, m)
-			} else {
-				ret.Members = append(ret.Members, m)
-			}
+			ret.Members = append(ret.Members, m)
+			offset += m.Size()
 		} else {
+			var div = pos - offset
+			if div > 0{ // 有空隙
+				genMember(&ret, offset, div)
+				offset += div
+			}
 
+			ret.Members = append(ret.Members, m)
+			offset += m.Size()
 		}
-		lastPos = pos
 	}
 
+	return ret
 }

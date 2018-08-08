@@ -24,5 +24,5 @@ func main() {
 	var sp StructParser
 	sp.ParseFile(filePath)
 	//sp.PrintWords()
-
+	sp.DumpFixedStructs()
 }
